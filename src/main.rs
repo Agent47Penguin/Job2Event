@@ -7,8 +7,8 @@ use std::{
 
 // External crates
 use actix_files as fs;
-use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
-use calamine::{open_workbook_auto, Data, Reader};
+use actix_web::{App, HttpResponse, HttpServer, Responder, get, web};
+use calamine::{Data, Reader, open_workbook_auto};
 use chrono::{Datelike, Duration, NaiveDate};
 use serde::Serialize;
 use sysinfo::System;
@@ -170,7 +170,7 @@ fn format_details(row: &[Data]) -> String {
         row[SAME_DAY],           // Same Day
         row[SCHEDULED],          // Scheduled
         row[TRAVEL],             // Travel
-        get_date_contacted(row),     // Date Contacted
+        get_date_contacted(row), // Date Contacted
         row[NOTES]               // Notes
     )
 }
@@ -193,5 +193,89 @@ fn get_date_contacted(row: &[Data]) -> String {
         format!("{}/{}/{}", date.month(), date.day(), date.year())
     } else {
         String::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use calamine::Data;
+
+    fn make_row(date_val: Data) -> Vec<Data> {
+        let mut row = vec![Data::Empty; 23];
+        row[DATE_CONTACTED] = date_val;
+        row
+    }
+
+    // --- get_date_contacted ---
+
+    #[test]
+    fn date_contacted_from_float_serial() {
+        // Excel serial 45291 = 2024-01-01
+        let row = make_row(Data::Float(45291.0));
+        assert_eq!(get_date_contacted(&row), "1/1/2024");
+    }
+
+    #[test]
+    fn date_contacted_from_string_serial() {
+        let row = make_row(Data::String("45291".to_string()));
+        assert_eq!(get_date_contacted(&row), "1/1/2024");
+    }
+
+    #[test]
+    fn date_contacted_from_unparseable_string_returns_empty() {
+        let row = make_row(Data::String("not-a-date".to_string()));
+        assert_eq!(get_date_contacted(&row), "");
+    }
+
+    #[test]
+    fn date_contacted_from_empty_returns_empty() {
+        let row = make_row(Data::Empty);
+        assert_eq!(get_date_contacted(&row), "");
+    }
+
+    // --- CalendarEvent Display ---
+
+    #[test]
+    fn display_shows_all_fields_when_populated() {
+        let event = CalendarEvent {
+            title: "Fix Valve".to_string(),
+            address: "123 Main St".to_string(),
+            description: "details here".to_string(),
+        };
+        let s = event.to_string();
+        assert!(s.contains("Fix Valve"));
+        assert!(s.contains("123 Main St"));
+        assert!(s.contains("details here"));
+    }
+
+    #[test]
+    fn display_fallback_when_title_empty() {
+        let event = CalendarEvent {
+            title: "".to_string(),
+            address: "123 Main St".to_string(),
+            description: "details".to_string(),
+        };
+        assert!(event.to_string().contains("No Title Found"));
+    }
+
+    #[test]
+    fn display_fallback_when_address_empty() {
+        let event = CalendarEvent {
+            title: "Fix Valve".to_string(),
+            address: "".to_string(),
+            description: "details".to_string(),
+        };
+        assert!(event.to_string().contains("No Address Found"));
+    }
+
+    #[test]
+    fn display_fallback_when_description_empty() {
+        let event = CalendarEvent {
+            title: "Fix Valve".to_string(),
+            address: "123 Main St".to_string(),
+            description: "".to_string(),
+        };
+        assert!(event.to_string().contains("No Description Found"));
     }
 }
