@@ -1,0 +1,90 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from tag
+        id: version
+        shell: bash
+        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Get previous tag for changelog
+        id: previous_tag
+        shell: bash
+        run: |
+          CURRENT_TAG="${GITHUB_REF#refs/tags/}"
+          PREVIOUS_TAG=$(git tag --sort=-version:refname | grep -v "^${CURRENT_TAG}$" | head -n 1 || echo "")
+          echo "previous_tag=$PREVIOUS_TAG" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        shell: bash
+        run: |
+          PREVIOUS_TAG="${{ steps.previous_tag.outputs.previous_tag }}"
+          if [ -z "$PREVIOUS_TAG" ]; then
+            TOTAL_COMMITS=$(git rev-list --count HEAD)
+            if [ "$TOTAL_COMMITS" -le 10 ]; then
+              CHANGELOG=$(git log --oneline --pretty=format:"- %s" HEAD)
+            else
+              CHANGELOG=$(git log --oneline --pretty=format:"- %s" HEAD~10..HEAD)
+            fi
+          else
+            CHANGELOG=$(git log --oneline --pretty=format:"- %s" ${PREVIOUS_TAG}..HEAD)
+          fi
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Build
+        run: cargo build --release --target x86_64-pc-windows-msvc
+
+      - name: Rename binary
+        shell: bash
+        run: mv target/x86_64-pc-windows-msvc/release/job2event.exe target/x86_64-pc-windows-msvc/release/Job2Event-${{ steps.version.outputs.version }}.exe
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: "Job2Event ${{ steps.version.outputs.version }}"
+          body: |
+            ## Changes
+            ${{ steps.changelog.outputs.changelog }}
+
+            ### Release Management
+            - **Version**: ${{ steps.version.outputs.version }}
+
+            For detailed changes, see the [full changelog](https://github.com/${{ github.repository }}/compare/${{ steps.previous_tag.outputs.previous_tag }}...${{ steps.version.outputs.version }})
+          files: target/x86_64-pc-windows-msvc/release/Job2Event-${{ steps.version.outputs.version }}.exe
+          draft: true
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
