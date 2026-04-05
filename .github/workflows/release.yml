@@ -67,9 +67,10 @@ jobs:
       - name: Build
         run: cargo build --release --target x86_64-pc-windows-msvc
 
-      - name: Rename binary
-        shell: bash
-        run: mv target/x86_64-pc-windows-msvc/release/job2event.exe target/x86_64-pc-windows-msvc/release/Job2Event-${{ steps.version.outputs.version }}.exe
+      - name: Zip binary
+        shell: pwsh
+        run: |
+          Compress-Archive -Path target/x86_64-pc-windows-msvc/release/job2event.exe -DestinationPath Job2Event-${{ steps.version.outputs.version }}.zip
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -83,7 +84,7 @@ jobs:
             - **Version**: ${{ steps.version.outputs.version }}
 
             For detailed changes, see the [full changelog](https://github.com/${{ github.repository }}/compare/${{ steps.previous_tag.outputs.previous_tag }}...${{ steps.version.outputs.version }})
-          files: target/x86_64-pc-windows-msvc/release/Job2Event-${{ steps.version.outputs.version }}.exe
+          files: Job2Event-${{ steps.version.outputs.version }}.zip
           draft: true
           prerelease: false
         env:
