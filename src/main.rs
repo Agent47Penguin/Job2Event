@@ -59,8 +59,17 @@ async fn get_event_data() -> impl Responder {
         let file_path = &args[1];
         let row_num: usize = args[2].parse().unwrap_or(1);
 
-        let mut workbook =
-            open_workbook_auto(file_path).unwrap_or_else(|_| panic!("Cannot open file"));
+        let mut workbook = match open_workbook_auto(file_path) {
+            Ok(wb) => wb,
+            Err(e) => {
+                println!("  Cannot open file: {e}");
+                return web::Json(CalendarEvent {
+                    title: "".to_string(),
+                    address: "".to_string(),
+                    description: format!("Error opening file: {e}"),
+                });
+            }
+        };
         let sheet = workbook.worksheet_range_at(0).unwrap().unwrap();
 
         if let Some(row) = sheet.rows().nth(row_num - 1) {
@@ -112,8 +121,9 @@ fn kill_other_instances() {
     let s = System::new_all();
     let current_pid = std::process::id();
 
+    // Process name is Windows-specific; this is intentional as the release target is Windows only.
     for (pid, process) in s.processes() {
-        if process.name() == "job2event.exe" && pid.as_u32() != current_pid {
+        if process.name().to_str().unwrap_or("") == "job2event.exe" && pid.as_u32() != current_pid {
             println!("Closed Process ID: {}", pid.as_u32());
             process.kill();
         }
