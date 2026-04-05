@@ -13,7 +13,6 @@ use chrono::{Datelike, Duration, NaiveDate};
 use serde::Serialize;
 use sysinfo::System;
 use tokio::time::sleep;
-use webbrowser;
 
 // Local modules
 mod constants;
@@ -30,10 +29,25 @@ pub struct CalendarEvent {
 
 impl Display for CalendarEvent {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "  Title: {}\n  Address: {}\n  Description:\n{}",
-               if self.title.is_empty() { "No Title Found" } else { &self.title },
-               if self.address.is_empty() { "No Address Found" } else { &self.address },
-               if self.description.is_empty() { "  No Description Found" } else { &self.description })
+        write!(
+            f,
+            "  Title: {}\n  Address: {}\n  Description:\n{}",
+            if self.title.is_empty() {
+                "No Title Found"
+            } else {
+                &self.title
+            },
+            if self.address.is_empty() {
+                "No Address Found"
+            } else {
+                &self.address
+            },
+            if self.description.is_empty() {
+                "  No Description Found"
+            } else {
+                &self.description
+            }
+        )
     }
 }
 
@@ -45,7 +59,8 @@ async fn get_event_data() -> impl Responder {
         let file_path = &args[1];
         let row_num: usize = args[2].parse().unwrap_or(1);
 
-        let mut workbook = open_workbook_auto(file_path).unwrap_or_else(|_| panic!("Cannot open file"));
+        let mut workbook =
+            open_workbook_auto(file_path).unwrap_or_else(|_| panic!("Cannot open file"));
         let sheet = workbook.worksheet_range_at(0).unwrap().unwrap();
 
         if let Some(row) = sheet.rows().nth(row_num - 1) {
@@ -53,14 +68,14 @@ async fn get_event_data() -> impl Responder {
             CalendarEvent {
                 title: row[CALENDAR_ENTRY].to_string(),
                 address: row[ADDRESS].to_string(),
-                description: format_details(row)
+                description: format_details(row),
             }
         } else {
             println!("  No data found in file");
             CalendarEvent {
                 title: "Default Event".to_string(),
                 address: "".to_string(),
-                description: "No data found".to_string()
+                description: "No data found".to_string(),
             }
         }
     } else {
@@ -68,10 +83,10 @@ async fn get_event_data() -> impl Responder {
         CalendarEvent {
             title: "".to_string(),
             address: "".to_string(),
-            description: "".to_string()
+            description: "".to_string(),
         }
     };
-    println!("Data Scraped:\n{}", event.to_string());
+    println!("Data Scraped:\n{}", event);
 
     web::Json(event)
 }
@@ -124,7 +139,7 @@ async fn main() -> std::io::Result<()> {
             .service(fs::Files::new("/static", "static").show_files_listing())
             .service(web::resource("/exit").route(web::post().to(exit)))
     })
-        .bind(SERVER_ADDR)?;
+    .bind(SERVER_ADDR)?;
 
     println!("Created new instance at http://localhost:8080/");
     webbrowser::open("http://localhost:8080/").expect("Failed to open URL");
